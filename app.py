@@ -1,37 +1,33 @@
-from langchain.chains import RetrievalQA
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from langchain.llms import HuggingFacePipeline
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.llms import HuggingFacePipeline
+from langchain_community.document_loaders import TextLoader
+
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import gradio as gr
-import os
 
-# ベクトルDBの読み込み
+# ベクトル検索用の埋め込みモデル
 embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-vectordb = Chroma(persist_directory="memory", embedding_function=embedding)
-retriever = vectordb.as_retriever()
 
-# モデル定義
-from transformers import pipeline
-qa_pipeline = pipeline("text-generation", 
-    model="tiiuae/falcon-rw-1b", 
-    tokenizer="tiiuae/falcon-rw-1b", 
-    max_new_tokens=512)
+# 記憶ベクトルの保存ディレクトリ
+vectordb = Chroma(persist_directory="memory", embedding_function=embedding)
+
+# 推論モデル（軽量GPT風モデルなど）
+tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-rw-1b")
+model = AutoModelForCausalLM.from_pretrained("tiiuae/falcon-rw-1b")
+qa_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=100)
+
 llm = HuggingFacePipeline(pipeline=qa_pipeline)
 
-# LangChainのQAラッパー
-qa = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+# チャット関数
+def chat(message):
+    docs = vectordb.similarity_search(message)
+    context = "\n".join([doc.page_content for doc in docs])
+    prompt = f"以下の文脈に基づいて回答してください：\n{context}\n質問：{message}\n回答："
+    return llm(prompt)
 
 # Gradio UI
-def chatbot_interface(question):
-    answer = qa.run(question)
-    return answer
+interface = gr.Interface(fn=chat, inputs="text", outputs="text", title="記憶付きMyGPT")
 
-iface = gr.Interface(fn=chatbot_interface,
-                     inputs="text",
-                     outputs="text",
-                     title="記憶付きMyGPT",
-                     description="過去の要約を覚えたGPT風チャット")
-
-if __name__ == "__main__":
-    iface.launch()
+# ✅ 外部アクセス用に修正された launch
+interface.launch(server_name="0.0.0.0", server_port=7860)
