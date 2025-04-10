@@ -1,6 +1,7 @@
-streamlit
-langchain
-openai
-chromadb
+gradio
+transformers
 sentence-transformers
+langchain
+chromadb
+python-dotenv
 tqdm
