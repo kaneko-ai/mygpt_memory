@@ -1,20 +1,28 @@
-from langchain.document_loaders import TextLoader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.document_loaders import TextLoader
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from chromadb.config import Settings  # ✅ 追加
 import os
 
-# summaryファイルを読み込み
-loader = TextLoader("summary_txt/summary_202504.txt", encoding="utf-8")
-docs = loader.load()
+# Step 1: 要約ファイル読み込み
+docs = []
+for filename in os.listdir("summary_txt"):
+    if filename.endswith(".txt"):
+        loader = TextLoader(os.path.join("summary_txt", filename), encoding="utf-8")
+        docs.extend(loader.load())
 
-# テキスト分割
-text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-documents = text_splitter.split_documents(docs)
-
-# ベクトル化と保存
+# Step 2: ベクトル化
 embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-vectordb = Chroma.from_documents(documents, embedding, persist_directory="memory")
-vectordb.persist()
 
-print("✅ 記憶登録が完了しました！")
+# Step 3: 記憶DBを構築（duckdbを明示）
+vectordb = Chroma.from_documents(
+    docs,
+    embedding,
+    persist_directory="memory",
+    client_settings=Settings(
+        chroma_db_impl="duckdb+parquet",
+        persist_directory="memory"
+    )
+)
+
+vectordb.persist()
