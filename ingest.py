@@ -1,28 +1,29 @@
 from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from chromadb.config import Settings  # ✅ 追加
+from chromadb.config import Settings  # ✅ 新仕様に必要
 import os
 
-# Step 1: 要約ファイル読み込み
-docs = []
-for filename in os.listdir("summary_txt"):
-    if filename.endswith(".txt"):
-        loader = TextLoader(os.path.join("summary_txt", filename), encoding="utf-8")
-        docs.extend(loader.load())
+# テキストファイル群を読み込む
+loader = TextLoader("summary_txt", glob="*.txt", encoding="utf-8")
+documents = loader.load()
 
-# Step 2: ベクトル化
+# ベクトル変換器（埋め込みモデル）
 embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# Step 3: 記憶DBを構築（duckdbを明示）
+# ✅ Chroma新仕様：Settingsを明示
+chroma_settings = Settings(
+    chroma_db_impl="duckdb+parquet",
+    persist_directory="memory"
+)
+
+# ✅ 新しい Chroma クライアントで保存
 vectordb = Chroma.from_documents(
-    docs,
+    documents,
     embedding,
     persist_directory="memory",
-    client_settings=Settings(
-        chroma_db_impl="duckdb+parquet",
-        persist_directory="memory"
-    )
+    client_settings=chroma_settings
 )
 
 vectordb.persist()
+print("✅ 記憶ベクトルの保存が完了しました。")
